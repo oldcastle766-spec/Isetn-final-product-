@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ISET Nabeul - Campus 3D Ultra-Photoréaliste & Analytics</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js et OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js pour les Graphiques et Statistiques -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; touch-action: none; background-color: #070a13; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        .joystick-base {
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            position: absolute;
+            bottom: 25px;
+            left: 25px;
+            touch-action: none;
+            backdrop-filter: blur(10px);
+            z-index: 20;
+        }
+        .joystick-stick {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            border-radius: 50%;
+            position: absolute;
+            top: 29px;
+            left: 29px;
+            box-shadow: 0 0 15px rgba(37, 99, 235, 0.7);
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 4px; }
+    </style>
+</head>
+<body class="text-white select-none">
+
+    <!-- Conteneur 3D -->
+    <div id="canvas-container"></div>
+
+    <!-- En-tête -->
+    <header class="absolute top-0 left-0 right-0 p-3 md:p-4 flex justify-between items-center bg-gray-950/85 backdrop-blur-md border-b border-gray-800 z-10">
+        <div class="flex items-center space-x-3">
+            <div class="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-600/30">
+                <i class="fa-solid fa-graduation-cap text-lg md:text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-sm md:text-lg leading-tight flex items-center gap-2">
+                    ISET Nabeul 
+                    <a href="http://www.isetn.rnu.tn" target="_blank" rel="noopener noreferrer" class="text-xs text-blue-400 hover:text-blue-300 font-normal flex items-center gap-1 transition">
+                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> Portal
+                    </a>
+                </h1>
+                <p class="text-[10px] md:text-xs text-gray-400">Institut Supérieur des Études Technologiques de Nabeul - Campus 3D PBR</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <button id="btn-toggle-menu" class="lg:hidden bg-gray-900 hover:bg-gray-800 text-blue-400 p-2 rounded-lg border border-gray-700 text-sm">
+                <i class="fa-solid fa-list-ul"></i>
+            </button>
+            <button id="btn-day-night" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 p-2 md:p-2.5 rounded-lg border border-gray-800 transition">
+                <i class="fa-solid fa-sun text-sm md:text-base" id="theme-icon"></i>
+            </button>
+            <button id="btn-reset" class="bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-2 rounded-lg font-medium text-xs md:text-sm transition flex items-center gap-1.5 shadow-lg shadow-blue-600/20">
+                <i class="fa-solid fa-arrows-to-dot"></i> <span class="hidden sm:inline">Vue globale</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- BOUTON EN BAS À GAUCHE POUR OUVRIR LES ANNEES 2025 / STATS / CLASSEMENT -->
+    <button id="btn-open-stats" class="absolute bottom-6 left-6 z-30 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4 py-3 rounded-2xl shadow-2xl border border-blue-400/30 flex items-center gap-3 backdrop-blur-md transition hover:scale-105 active:scale-95">
+        <div class="bg-white/20 p-2 rounded-xl">
+            <i class="fa-solid fa-chart-line text-lg"></i>
+        </div>
+        <div class="text-left">
+            <div class="text-xs font-bold leading-tight">Bilans 2025 & Stats</div>
+            <div class="text-[10px] text-blue-200">Classement ISETs, Filières & Masters</div>
+        </div>
+    </button>
+
+    <!-- FENÊTRE MODALE D'INFORMATIONS GENERALES ET STATISTIQUES (EN BAS À GAUCHE / POPUP) -->
+    <div id="stats-modal" class="absolute bottom-20 left-4 md:left-6 w-[92vw] sm:w-[480px] md:w-[620px] bg-gray-950/95 backdrop-blur-2xl rounded-2xl border border-blue-500/30 shadow-2xl z-40 hidden transition-all overflow-hidden max-h-[80vh] flex flex-col">
+        <!-- En-tête Modale Stats -->
+        <div class="p-4 bg-gradient-to-r from-blue-900/40 to-gray-900 border-b border-gray-800 flex justify-between items-center shrink-0">
+            <div class="flex items-center gap-2.5">
+                <i class="fa-solid fa-chart-pie text-blue-400 text-lg"></i>
+                <h3 class="font-bold text-sm md:text-base text-white">Statistiques, Bilan 2025 & Formations ISETN</h3>
+            </div>
+            <button id="btn-close-stats" class="text-gray-400 hover:text-white bg-gray-900/80 p-1.5 rounded-lg border border-gray-700">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Onglets de Navigation -->
+        <div class="flex border-b border-gray-800 bg-gray-900/50 text-xs shrink-0">
+            <button class="tab-btn flex-1 py-2.5 px-3 font-semibold text-blue-400 border-b-2 border-blue-500 transition" data-tab="tab-summary">
+                <i class="fa-solid fa-calendar-check mr-1"></i> Résumé 2025
+            </button>
+            <button class="tab-btn flex-1 py-2.5 px-3 font-semibold text-gray-400 hover:text-gray-200 transition" data-tab="tab-rankings">
+                <i class="fa-solid fa-trophy mr-1"></i> Stats & Rang
+            </button>
+            <button class="tab-btn flex-1 py-2.5 px-3 font-semibold text-gray-400 hover:text-gray-200 transition" data-tab="tab-courses">
+                <i class="fa-solid fa-graduation-cap mr-1"></i> Filières & Masters
+            </button>
+        </div>
+
+        <!-- Contenu des Onglets -->
+        <div class="p-4 overflow-y-auto custom-scrollbar space-y-4 text-xs md:text-sm flex-1">
+            
+            <!-- SECTION 1: RÉSUMÉ DE L'ANNÉE 2025 -->
+            <div id="tab-summary" class="tab-content space-y-3">
+                <h4 class="text-blue-400 font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-newspaper"></i> Faits Marquants & Réalisations 2025
+                </h4>
+                <div class="grid grid-cols-1 gap-2.5">
+                    <div class="bg-gray-900/70 p-3 rounded-xl border border-gray-800">
+                        <div class="text-xs font-bold text-amber-400 flex items-center justify-between mb-1">
+                            <span><i class="fa-solid fa-microchip mr-1.5"></i> Modernisation du FabLab & Hackathon 2025</span>
+                            <span class="text-[10px] bg-amber-400/10 text-amber-300 px-2 py-0.5 rounded-full">Juin 2025</span>
+                        </div>
+                        <p class="text-gray-300 text-xs">Inauguration de nouveaux équipements d'impression 3D industrielle et organisation du Hackathon National sur l'IoT et la Robotique réunissant 15 ISETs.</p>
+                    </div>
+
+                    <div class="bg-gray-900/70 p-3 rounded-xl border border-gray-800">
+                        <div class="text-xs font-bold text-emerald-400 flex items-center justify-between mb-1">
+                            <span><i class="fa-solid fa-handshake mr-1.5"></i> Partenariats Industriels & PFE</span>
+                            <span class="text-[10px] bg-emerald-400/10 text-emerald-300 px-2 py-0.5 rounded-full">Année 2025</span>
+                        </div>
+                        <p class="text-gray-300 text-xs">Signature de 18 nouvelles conventions de partenariat avec le tissu industriel du Cap Bon pour l'insertion des étudiants et la réalisation des projets PFE.</p>
+                    </div>
+
+                    <div class="bg-gray-900/70 p-3 rounded-xl border border-gray-800">
+                        <div class="text-xs font-bold text-sky-400 flex items-center justify-between mb-1">
+                            <span><i class="fa-solid fa-solar-panel mr-1.5"></i> Transition Énergétique du Campus</span>
+                            <span class="text-[10px] bg-sky-400/10 text-sky-300 px-2 py-0.5 rounded-full">Novembre 2025</span>
+                        </div>
+                        <p class="text-gray-300 text-xs">Installation de panneaux photovoltaïques sur les toits des Blocs C/D pour couvrir 40% de l'alimentation électrique des laboratoires informatiques.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 2: STATISTIQUES ET CLASSEMENT TUNISIE -->
+            <div id="tab-rankings" class="tab-content hidden space-y-4">
+                <div class="grid grid-cols-2 gap-2 text-center">
+                    <div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800">
+                        <div class="text-xs text-gray-400">Rang Réseau ISET</div>
+                        <div class="text-xl font-extrabold text-blue-400 mt-0.5">Top 3 national</div>
+                    </div>
+                    <div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800">
+                        <div class="text-xs text-gray-400">Taux d'Employabilité</div>
+                        <div class="text-xl font-extrabold text-emerald-400 mt-0.5">84.2 %</div>
+                    </div>
+                </div>
+
+                <!-- Graphique 1: Classement des Top ISETs -->
+                <div class="bg-gray-900/70 p-3 rounded-xl border border-gray-800">
+                    <h5 class="text-xs font-bold text-gray-300 mb-2 flex items-center gap-1.5">
+                        <i class="fa-solid fa-chart-bar text-blue-400"></i> Performance Globale vs Autres ISETs (Index /100)
+                    </h5>
+                    <div class="h-44">
+                        <canvas id="chartIsetRanking"></canvas>
+                    </div>
+                </div>
+
+                <!-- Graphique 2: Taux d'insertion par filière -->
+                <div class="bg-gray-900/70 p-3 rounded-xl border border-gray-800">
+                    <h5 class="text-xs font-bold text-gray-300 mb-2 flex items-center gap-1.5">
+                        <i class="fa-solid fa-briefcase text-emerald-400"></i> Taux d'Insertion Professionnelle (%)
+                    </h5>
+                    <div class="h-40">
+                        <canvas id="chartEmployability"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 3: FILIÈRES & MASTERS -->
+            <div id="tab-courses" class="tab-content hidden space-y-3">
+                
+                <!-- Licences / Filières -->
+                <div>
+                    <h4 class="text-blue-400 font-bold text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <i class="fa-solid fa-book-bookmark"></i> Filières & Licences Appliquées
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800">
+                            <div class="font-bold text-gray-200 text-xs">Département Technologies de l'Information</div>
+                            <p class="text-gray-400 text-[11px] mt-0.5">• DSI (Développement des Systèmes d'Information)<br>• RSI (Réseaux et Systèmes Informatiques)<br>• MDW (Multimedia et Développement Web)</p>
+                        </div>
+                        <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800">
+                            <div class="font-bold text-gray-200 text-xs">Département Génie Électrique</div>
+                            <p class="text-gray-400 text-[11px] mt-0.5">• Automatisme & Informatique Industrielle<br>• Électronique Industrielle<br>• Télécommunications</p>
+                        </div>
+                        <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800">
+                            <div class="font-bold text-gray-200 text-xs">Département Génie Mécanique & Génie Civil</div>
+                            <p class="text-gray-400 text-[11px] mt-0.5">• Conception & Fabrication Mécanique (CFM)<br>• Maintenance Industrielle (MI)<br>• Bâtiment & Travaux Publics (BTP)</p>
+                        </div>
+                        <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800">
+                            <div class="font-bold text-gray-200 text-xs">Département Gestion & Économie (GEA)</div>
+                            <p class="text-gray-400 text-[11px] mt-0.5">• Administration des Affaires<br>• Comptabilité & Finance<br>• Commerce International</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Masters Professionnels -->
+                <div class="pt-2 border-t border-gray-800">
+                    <h4 class="text-indigo-400 font-bold text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <i class="fa-solid fa-user-graduate"></i> Masters Professionnels Co-construits
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="bg-indigo-950/30 p-2.5 rounded-xl border border-indigo-500/20">
+                            <div class="font-bold text-indigo-200 text-xs">Master en Cloud Computing & DevOps</div>
+                            <div class="text-[10px] text-gray-300">Spécialisation dans l'architecture Cloud, la conteneurisation et l'automatisation.</div>
+                        </div>
+                        <div class="bg-indigo-950/30 p-2.5 rounded-xl border border-indigo-500/20">
+                            <div class="font-bold text-indigo-200 text-xs">Master Systèmes Embarqués & IoT</div>
+                            <div class="text-[10px] text-gray-300">Développement de systèmes temps réel et capteurs connectés intelligents.</div>
+                        </div>
+                        <div class="bg-indigo-950/30 p-2.5 rounded-xl border border-indigo-500/20">
+                            <div class="font-bold text-indigo-200 text-xs">Master Ingénierie des Systèmes de Production</div>
+                            <div class="text-[10px] text-gray-300">Optimisation des chaînes de fabrication et Industrie 4.0.</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Controls Tactiles Mobile -->
+    <div class="absolute right-4 bottom-24 flex flex-col space-y-2 z-20 md:hidden">
+        <button id="btn-zoom-in" class="bg-gray-900/90 backdrop-blur-md border border-gray-700 text-white w-11 h-11 rounded-full flex items-center justify-center active:bg-blue-600 text-lg shadow-xl">
+            <i class="fa-solid fa-plus"></i>
+        </button>
+        <button id="btn-zoom-out" class="bg-gray-900/90 backdrop-blur-md border border-gray-700 text-white w-11 h-11 rounded-full flex items-center justify-center active:bg-blue-600 text-lg shadow-xl">
+            <i class="fa-solid fa-minus"></i>
+        </button>
+    </div>
+
+    <!-- Joystick Tactile Mobile -->
+    <div id="joystick-base" class="joystick-base md:hidden">
+        <div id="joystick-stick" class="joystick-stick"></div>
+    </div>
+
+    <!-- Menu Latéral Bâtiments -->
+    <div id="building-menu" class="absolute top-20 right-4 bottom-4 w-80 bg-gray-950/90 backdrop-blur-xl p-4 rounded-2xl border border-gray-800 z-30 flex-col hidden lg:flex transition-all shadow-2xl">
+        <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-800">
+            <h3 class="font-semibold text-sm text-blue-400 flex items-center gap-2">
+                <i class="fa-solid fa-map-location-dot"></i> Infrastructures ISET
+            </h3>
+            <button id="btn-close-menu" class="lg:hidden text-gray-400 hover:text-white">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar" id="building-list"></div>
+    </div>
+
+    <!-- MODALE BÂTIMENT ULTRA-DÉTAILLÉE -->
+    <div id="info-modal" class="absolute inset-x-3 bottom-3 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-1/2 md:-translate-x-1/2 md:w-[600px] bg-gray-950/95 backdrop-blur-2xl rounded-2xl border border-blue-500/30 shadow-2xl z-40 hidden transition-all overflow-hidden max-h-[90vh] flex flex-col">
+        
+        <div class="relative h-56 w-full bg-gray-900 overflow-hidden shrink-0">
+            <img id="modal-img-main" src="" alt="Bâtiment ISET" class="w-full h-full object-cover transition-all duration-500">
+            <div class="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/30 to-transparent"></div>
+            
+            <button id="close-modal" class="absolute top-3 right-3 bg-gray-950/80 text-white hover:bg-red-600 w-8 h-8 rounded-full flex items-center justify-center transition border border-gray-700">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <div class="absolute bottom-3 left-4 right-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] md:text-xs font-bold bg-blue-600 text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-md" id="modal-dept">Département</span>
+                    <span class="text-[10px] md:text-xs font-semibold bg-gray-800/80 text-gray-300 px-2 py-0.5 rounded-full border border-gray-700" id="modal-code">CODE</span>
+                </div>
+                <h2 class="text-xl md:text-2xl font-bold text-white mt-1 leading-tight" id="modal-title">Nom du Bâtiment</h2>
+            </div>
+        </div>
+
+        <div class="p-4 md:p-5 overflow-y-auto custom-scrollbar space-y-4 text-xs md:text-sm">
+            <!-- Description -->
+            <p class="text-gray-300 leading-relaxed bg-gray-900/50 p-3 rounded-xl border border-gray-800/80" id="modal-desc"></p>
+
+            <!-- Galerie d'images réelles -->
+            <div>
+                <h4 class="text-gray-400 font-bold mb-2 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fa-solid fa-images text-blue-400"></i> Photos & Espaces Internes
+                </h4>
+                <div class="grid grid-cols-4 gap-2" id="modal-gallery"></div>
+            </div>
+
+            <!-- Spécifications & Équipements -->
+            <div class="bg-gray-900/80 p-3.5 rounded-xl border border-gray-800 space-y-2.5">
+                <h4 class="text-blue-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fa-solid fa-list-check"></i> Fiche Technique & Équipements
+                </h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs" id="modal-specs"></div>
+            </div>
+
+            <!-- Localisation & Liens -->
+            <div class="bg-gray-900/90 p-3.5 rounded-xl border border-blue-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                    <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Position Géographique Réelle</div>
+                    <div class="text-xs text-gray-200 font-medium flex items-center gap-1.5 mt-1" id="modal-coords">
+                        <i class="fa-solid fa-location-dot text-red-500"></i> Route de Mraissa, Nabeul 8000
+                    </div>
+                </div>
+                <a id="btn-gmaps" href="#" target="_blank" rel="noopener noreferrer" class="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs px-3.5 py-2 rounded-xl font-medium transition flex items-center gap-2 shadow-lg shadow-emerald-600/20 shrink-0">
+                    <i class="fa-solid fa-map-location-dot"></i> Voir sur Google Maps
+                </a>
+            </div>
+        </div>
+
+        <div class="p-3 bg-gray-950 border-t border-gray-800/80 flex justify-between items-center shrink-0">
+            <a href="http://www.isetn.rnu.tn" target="_blank" rel="noopener noreferrer" class="text-xs text-blue-400 hover:underline flex items-center gap-1">
+                <i class="fa-solid fa-globe"></i> Site Officiel ISET Nabeul
+            </a>
+            <button id="btn-focus" class="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white text-xs px-4 py-2 rounded-xl font-medium transition flex items-center gap-2 shadow-lg shadow-blue-600/20">
+                <i class="fa-solid fa-video"></i> Centrer la Caméra
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. DONNÉES ENRICHIES DES BÂTIMENTS ---
+        const batimentsData = [
+            {
+                id: "admin",
+                code: "BLOC-ADM",
+                name: "Bloc Administratif & Direction",
+                dept: "Administration Centrale",
+                size: [38, 14, 20],
+                pos: [0, 0, 60],
+                desc: "Cœur névralgique du campus de ISET Nabeul. Abrite la Direction Générale, le Secrétariat Général, la Scolarité centrale, le Bureau des stages, la gestion financière et les relations entreprises.",
+                photos: [
+                    "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1541829070764-84a7d30dd3f3?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80"
+                ],
+                specs: [
+                    "<strong>Services principaux :</strong> Direction, Scolarité, Stage PFE",
+                    "<strong>Bureaux :</strong> 28 Bureaux Administratifs",
+                    "<strong>Superficie :</strong> ~1 200 m²",
+                    "<strong>Contact :</strong> Contact@isetn.rnu.tn | (+216) 72 232 206"
+                ],
+                coords: "36.4428° N, 10.7180° E",
+                mapsUrl: "https://maps.google.com/?q=36.4428,10.7180"
+            },
+            {
+                id: "cd",
+                code: "BLOC-C/D",
+                name: "Bloc C & D (TI & Électrique)",
+                dept: "Génie Informatique & Électrique",
+                size: [30, 16, 46],
+                pos: [-45, 0, 30],
+                desc: "Complexe d'enseignement dédié aux technologies de l'information (DSI, RSI, MDW) et au Génie Électrique (Automatisme, Électronique, Télécoms). Équipé de laboratoires informatiques connectés.",
+                photos: [
+                    "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80"
+                ],
+                specs: [
+                    "<strong>Salles TP :</strong> 14 Salles Informatiques dédiées",
+                    "<strong>Laboratoires :</strong> Académie Cisco, Salles Systèmes Embarqués",
+                    "<strong>Filières :</strong> DSI, RSI, MDW, Électronique",
+                    "<strong>Capacité :</strong> ~900 Étudiants / jour"
+                ],
+                coords: "36.4431° N, 10.7175° E",
+                mapsUrl: "https://maps.google.com/?q=36.4431,10.7175"
+            },
+            {
+                id: "ab",
+                code: "BLOC-A/B",
+                name: "Bloc A & B (Génie Mécanique & Civil)",
+                dept: "Dép. Mécanique & Génie Civil",
+                size: [30, 16, 50],
+                pos: [-45, 0, -25],
+                desc: "Espace pédagogique réservé au Génie Mécanique (CFM, MI) et au Génie Civil (Bâtiment et Travaux Publics). Comprend des laboratoires de métrologie, de matériaux et des salles de dessin technique.",
+                photos: [
+                    "https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1537462715879-360eeb61a0ad?auto=format&fit=crop&w=800&q=80"
+                ],
+                specs: [
+                    "<strong>Laboratoires :</strong> RDM, Béton armé, Métrologie",
+                    "<strong>Logiciels :</strong> SolidWorks, AutoCAD, Revit",
+                    "<strong>Salles de cours :</strong> 18 Salles d'études",
+                    "<strong>Spécialités :</strong> Construction, Maintenance, CAO/DAO"
+                ],
+                coords: "36.4435° N, 10.7172° E",
+                mapsUrl: "https://maps.google.com/?q=36.4435,10.7172"
+            },
+            {
+                id: "amphi",
+                code: "AMPHI-BIB",
+                name: "Complexe Amphithéâtres & Bibliothèque",
+                dept: "Enseignement Général",
+                size: [40, 18, 36],
+                pos: [0, 0, -15],
+                desc: "Espace central accueillant les grands cours magistraux, les examens, conférences et séminaires. Héberge la grande bibliothèque universitaire du campus avec salles de lecture et documentation.",
+                photos: [
+                    "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1568667256549-094345857637?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?auto=format&fit=crop&w=800&q=80"
+                ],
+                specs: [
+                    "<strong>Amphithéâtres :</strong> 3 Grands Amphis (A, B, C)",
+                    "<strong>Capacité Amphis :</strong> 300 places chacun",
+                    "<strong>Bibliothèque :</strong> +15 000 Ouvrages techniques",
+                    "<strong>Services :</strong> Salles d'étude calmes, Wifi haut débit"
+                ],
+                coords: "36.4429° N, 10.7185° E",
+                mapsUrl: "https://maps.google.com/?q=36.4429,10.7185"
+            },
+            {
+                id: "e",
+                code: "BLOC-E",
+                name: "Bloc E (Gestion & Économie - GEA)",
+                dept: "Département GEA",
+                size: [26, 14, 56],
+                pos: [45, 0, 0],
+                desc: "Consacré aux sciences économiques, à la gestion des entreprises (GEA), à la comptabilité, au marketing et à la finance. Salles adaptées aux travaux dirigés et présentations de projets.",
+                photos: [
+                    "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80"
+                ],
+                specs: [
+                    "<strong>Parcours :</strong> Finance, Comptabilité, Commerce",
+                    "<strong>Équipements :</strong> Salles multimédias & ERP",
+                    "<strong>Salles TD :</strong> 16 Salles de cours",
+                    "<strong>Clubs :</strong> Enactus, Junior Entreprise ISETN"
+                ],
+                coords: "36.4425° N, 10.7190° E",
+                mapsUrl: "https://maps.google.com/?q=36.4425,10.7190"
+            },
+            {
+                id: "ateliers",
+                code: "HALL-IND",
+                name: "Grands Ateliers Industriels",
+                dept: "Hall Technologique Lourd",
+                size: [124, 12, 30],
+                pos: [-10, 0, -75],
+                desc: "Hall de production industrielle équipé de machines-outils lourdes à commande numérique (CNC), bancs d'essais moteurs, ateliers de soudure, chaudronnerie et automates d'usine.",
+                photos: [
+                    "https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1581092162384-8987c1d64718?auto=format&fit=crop&w=800&q=80"
+                ],
+                specs: [
+                    "<strong>Équipements :</strong> Tours & Fraiseuses CNC, Imprimantes 3D",
+                    "<strong>Ateliers :</strong> Fabrication, Fonderie, Automatisme",
+                    "<strong>Sécurité :</strong> Équipements aux normes ISO",
+                    "<strong>Superficie :</strong> ~3 500 m² d'ateliers"
+                ],
+                coords: "36.4438° N, 10.7168° E",
+                mapsUrl: "https://maps.google.com/?q=36.4438,10.7168"
+            }
+        ];
+
+        // --- 2. RENDERER & SCÈNE PHOTORÉALISTE ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.FogExp2(0x87ceeb, 0.00065);
+
+        const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 1, 2000);
+        camera.position.set(0, 140, 260);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.04;
+        controls.maxPolarAngle = Math.PI / 2.02;
+
+        // --- 3. TEXTURE PROCÉDURALE VITRES ---
+        function createGlassTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, 512, 512);
+            ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 3;
+            ctx.fillStyle = '#1e293b';
+            for (let x = 8; x < 512; x += 32) {
+                for (let y = 8; y < 512; y += 48) {
+                    ctx.fillRect(x, y, 22, 34); ctx.strokeRect(x, y, 22, 34);
+                    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+                    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 14, y); ctx.lineTo(x, y + 22); ctx.fill();
+                    ctx.fillStyle = '#1e293b';
+                }
+            }
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(2, 2);
+            return texture;
+        }
+        const windowTexture = createGlassTexture();
+
+        // --- 4. ÉCLAIRAGE DYNAMIQUE ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xfffaed, 1.6);
+        sunLight.position.set(190, 240, 130);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048; sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 10; sunLight.shadow.camera.far = 800;
+        const shadowDist = 240;
+        sunLight.shadow.camera.left = -shadowDist; sunLight.shadow.camera.right = shadowDist;
+        sunLight.shadow.camera.top = shadowDist; sunLight.shadow.camera.bottom = -shadowDist;
+        scene.add(sunLight);
+
+        // --- 5. INFRASTRUCTURES ROUTIÈRES & SOL ---
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x22441f, roughness: 0.95 });
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), groundMat);
+        ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+        function creerRouteAvecMarquages(w, h, x, z, rotY = 0) {
+            const group = new THREE.Group();
+            const asphaltMat = new THREE.MeshStandardMaterial({ color: 0x1a1d24, roughness: 0.8 });
+            const asphalt = new THREE.Mesh(new THREE.PlaneGeometry(w, h), asphaltMat);
+            asphalt.rotation.x = -Math.PI / 2; asphalt.receiveShadow = true; group.add(asphalt);
+
+            const curbMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.4 });
+            const curbLeft = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.3, h), curbMat);
+            curbLeft.position.set(-w / 2 - 0.35, 0.15, 0); curbLeft.receiveShadow = true; group.add(curbLeft);
+            const curbRight = curbLeft.clone(); curbRight.position.x = w / 2 + 0.35; group.add(curbRight);
+
+            const lineMat = new THREE.MeshBasicMaterial({ color: 0xeab308 });
+            const line = new THREE.Mesh(new THREE.PlaneGeometry(0.35, h * 0.96), lineMat);
+            line.rotation.x = -Math.PI / 2; line.position.y = 0.02; group.add(line);
+
+            group.position.set(x, 0, z); group.rotation.y = rotY; scene.add(group);
+        }
+
+        creerRouteAvecMarquages(28, 700, 150, 0);
+        creerRouteAvecMarquages(18, 270, 0, 105, Math.PI / 2);
+        creerRouteAvecMarquages(16, 270, 0, -105, Math.PI / 2);
+        creerRouteAvecMarquages(14, 190, 0, -10);
+
+        const parkingMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.7 });
+        const parking = new THREE.Mesh(new THREE.PlaneGeometry(50, 120), parkingMat);
+        parking.rotation.x = -Math.PI / 2; parking.position.set(-80, 0.01, -20); parking.receiveShadow = true; scene.add(parking);
+
+        const lineParkMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        for (let i = -50; i <= 50; i += 15) {
+            const pLine = new THREE.Mesh(new THREE.PlaneGeometry(13, 0.4), lineParkMat);
+            pLine.rotation.x = -Math.PI / 2; pLine.position.set(-80, 0.02, -20 + i); scene.add(pLine);
+        }
+
+        // --- 6. ARCHITECTURE BÂTIMENTS ---
+        const batimentsMeshes = [];
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 });
+        const baseMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.6 });
+        const glassMat = new THREE.MeshStandardMaterial({ map: windowTexture, roughness: 0.1, metalness: 0.85 });
+        const roofMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
+
+        batimentsData.forEach(data => {
+            const group = new THREE.Group();
+            const [w, h, d] = data.size;
+
+            const baseMesh = new THREE.Mesh(new THREE.BoxGeometry(w + 1.2, 1.8, d + 1.2), baseMat);
+            baseMesh.position.y = 0.9; baseMesh.castShadow = true; baseMesh.receiveShadow = true; group.add(baseMesh);
+
+            const mainMesh = new THREE.Mesh(new THREE.BoxGeometry(w, h - 1.8, d), wallMat);
+            mainMesh.position.y = (h - 1.8) / 2 + 1.8; mainMesh.castShadow = true; mainMesh.receiveShadow = true; group.add(mainMesh);
+
+            const winGeo = new THREE.PlaneGeometry(w * 0.92, (h - 3) * 0.85);
+            const winFront = new THREE.Mesh(winGeo, glassMat); winFront.position.set(0, h / 2, d / 2 + 0.1); group.add(winFront);
+            const winBack = new THREE.Mesh(winGeo, glassMat); winBack.position.set(0, h / 2, -d / 2 - 0.1); winBack.rotation.y = Math.PI; group.add(winBack);
+
+            const roofBorder = new THREE.Mesh(new THREE.BoxGeometry(w + 0.8, 0.8, d + 0.8), wallMat);
+            roofBorder.position.y = h + 0.4; roofBorder.castShadow = true; group.add(roofBorder);
+
+            const roofPlane = new THREE.Mesh(new THREE.BoxGeometry(w - 0.2, 0.2, d - 0.2), roofMat);
+            roofPlane.position.y = h + 0.2; group.add(roofPlane);
+
+            group.position.set(data.pos[0], data.pos[1], data.pos[2]);
+            group.userData = data; mainMesh.userData = data;
+
+            batimentsMeshes.push(mainMesh);
+            scene.add(group);
+        });
+
+        // --- 7. VÉHICULES ET TAXIS ---
+        const taxisExterne = [];
+        function buildRealisticCar(colorHex, isTaxi = false) {
+            const carGroup = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.75, roughness: 0.2 });
+            const body = new THREE.Mesh(new THREE.BoxGeometry(4.0, 1.15, 1.85), bodyMat);
+            body.position.y = 0.85; body.castShadow = true; carGroup.add(body);
+
+            const glassCarMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.1, metalness: 0.9 });
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.9, 1.6), glassCarMat);
+            cabin.position.set(-0.2, 1.8, 0); cabin.castShadow = true; carGroup.add(cabin);
+
+            if (isTaxi) {
+                const taxiSignMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+                const sign = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.3, 0.9), taxiSignMat);
+                sign.position.set(-0.2, 2.35, 0); carGroup.add(sign);
+            }
+
+            const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.32, 16);
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 });
+            [[1.2, 0.42, 0.95], [-1.2, 0.42, 0.95], [1.2, 0.42, -0.95], [-1.2, 0.42, -0.95]].forEach(pos => {
+                const w = new THREE.Mesh(wheelGeo, wheelMat);
+                w.rotation.x = Math.PI / 2; w.position.set(...pos); carGroup.add(w);
+            });
+            return carGroup;
+        }
+
+        for (let i = 0; i < 4; i++) {
+            const taxi = buildRealisticCar(0xeab308, true);
+            scene.add(taxi);
+            taxisExterne.push({ mesh: taxi, speed: 0.7 + Math.random() * 0.3, zMin: -280, zMax: 280, laneOffset: (i % 2 === 0) ? 146 : 154, direction: (i % 2 === 0) ? 1 : -1 });
+        }
+
+        // --- 8. VÉGÉTATION ---
+        function createTree(x, z) {
+            const treeGroup = new THREE.Group();
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3a1d0d, roughness: 0.95 });
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.75, 7.5, 8), trunkMat);
+            trunk.position.y = 3.75; trunk.castShadow = true; treeGroup.add(trunk);
+
+            const leafMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.7 });
+            for (let i = 0; i < 3; i++) {
+                const layer = new THREE.Mesh(new THREE.DodecahedronGeometry(4.0 - i * 0.8), leafMat);
+                layer.position.y = 7.0 + i * 2.3; layer.castShadow = true; treeGroup.add(layer);
+            }
+            treeGroup.position.set(x, 0, z); scene.add(treeGroup);
+        }
+        for (let x = -105; x <= 105; x += 28) { createTree(x, 90); createTree(x, -90); }
+
+        // --- 9. CLICS SUR BÂTIMENTS ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let selectedMesh = null;
+
+        window.addEventListener('click', (e) => {
+            if (e.target.tagName === 'CANVAS') {
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(batimentsMeshes, true);
+                if (intersects.length > 0) selectionnerBatiment(intersects[0].object);
+            }
+        });
+
+        function selectionnerBatiment(mesh) {
+            selectedMesh = mesh;
+            const data = mesh.userData;
+
+            document.getElementById('modal-dept').textContent = data.dept;
+            document.getElementById('modal-code').textContent = data.code;
+            document.getElementById('modal-title').textContent = data.name;
+            document.getElementById('modal-desc').textContent = data.desc;
+            document.getElementById('modal-coords').innerHTML = `<i class="fa-solid fa-location-dot text-red-500"></i> ${data.coords}`;
+            document.getElementById('btn-gmaps').href = data.mapsUrl;
+
+            const mainImg = document.getElementById('modal-img-main');
+            mainImg.src = data.photos[0];
+
+            const galleryEl = document.getElementById('modal-gallery');
+            galleryEl.innerHTML = '';
+            data.photos.forEach((photoUrl, idx) => {
+                const imgThumb = document.createElement('img');
+                imgThumb.src = photoUrl;
+                imgThumb.className = `h-16 w-full object-cover rounded-xl border-2 ${idx === 0 ? 'border-blue-500' : 'border-transparent'} hover:border-blue-400 cursor-pointer transition`;
+                imgThumb.addEventListener('click', () => {
+                    mainImg.src = photoUrl;
+                    Array.from(galleryEl.children).forEach(child => child.classList.replace('border-blue-500', 'border-transparent'));
+                    imgThumb.classList.replace('border-transparent', 'border-blue-500');
+                });
+                galleryEl.appendChild(imgThumb);
+            });
+
+            const specsEl = document.getElementById('modal-specs');
+            specsEl.innerHTML = '';
+            data.specs.forEach(spec => {
+                const item = document.createElement('div');
+                item.className = "bg-gray-950/60 p-2 rounded-lg border border-gray-800 text-gray-300";
+                item.innerHTML = spec;
+                specsEl.appendChild(item);
+            });
+
+            document.getElementById('info-modal').classList.remove('hidden');
+        }
+
+        // --- 10. GESTION DES MODALES, ONGLETS ET GRAPHIQUES ---
+        const btnOpenStats = document.getElementById('btn-open-stats');
+        const btnCloseStats = document.getElementById('btn-close-stats');
+        const statsModal = document.getElementById('stats-modal');
+
+        btnOpenStats.addEventListener('click', () => {
+            statsModal.classList.remove('hidden');
+            initChartsIfNeeded();
+        });
+        btnCloseStats.addEventListener('click', () => statsModal.classList.add('hidden'));
+
+        // Onglets dans la modale Stats
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabBtns.forEach(b => {
+                    b.classList.remove('text-blue-400', 'border-b-2', 'border-blue-500');
+                    b.classList.add('text-gray-400');
+                });
+                btn.classList.add('text-blue-400', 'border-b-2', 'border-blue-500');
+                btn.classList.remove('text-gray-400');
+
+                const targetTab = btn.getAttribute('data-tab');
+                tabContents.forEach(content => {
+                    if (content.id === targetTab) content.classList.remove('hidden');
+                    else content.classList.add('hidden');
+                });
+            });
+        });
+
+        // Graphiques Chart.js
+        let chartsInitialized = false;
+        function initChartsIfNeeded() {
+            if (chartsInitialized) return;
+            chartsInitialized = true;
+
+            // Chart 1 : Classement ISETs
+            const ctx1 = document.getElementById('chartIsetRanking').getContext('2d');
+            new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: ['ISET Nabeul', 'ISET Rades', 'ISET Sousse', 'ISET Sfax', 'ISET Bizerte'],
+                    datasets: [{
+                        label: 'Score Global / 100',
+                        data: [92, 89, 87, 85, 81],
+                        backgroundColor: ['#3b82f6', '#475569', '#475569', '#475569', '#475569'],
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, max: 100, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+                        x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+                    }
+                }
+            });
+
+            // Chart 2 : Employabilité
+            const ctx2 = document.getElementById('chartEmployability').getContext('2d');
+            new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: ['TI / Informatique', 'Génie Électrique', 'Génie Mécanique', 'Génie Civil', 'Gestion (GEA)'],
+                    datasets: [{
+                        label: "Taux d'insertion (%)",
+                        data: [91, 86, 82, 79, 83],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                        fill: true,
+                        tension: 0.3,
+                        pointBackgroundColor: '#10b981'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { min: 50, max: 100, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+                        x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // --- 11. AUTRES COMMANDES UI ---
+        const buildingListEl = document.getElementById('building-list');
+        batimentsData.forEach(data => {
+            const btn = document.createElement('button');
+            btn.className = "w-full text-left p-3 rounded-xl bg-gray-900/80 hover:bg-gray-800/90 active:bg-blue-600 transition flex items-center justify-between border border-gray-800 group shadow-md";
+            btn.innerHTML = `
+                <div>
+                    <div class="text-xs font-bold text-gray-100 group-hover:text-blue-400 transition">${data.name}</div>
+                    <div class="text-[10px] text-gray-400">${data.dept}</div>
+                </div>
+                <i class="fa-solid fa-chevron-right text-xs text-gray-600 group-hover:text-blue-400 transition"></i>
+            `;
+            btn.addEventListener('click', () => {
+                const mesh = batimentsMeshes.find(m => m.userData.id === data.id);
+                if (mesh) selectionnerBatiment(mesh);
+                document.getElementById('building-menu').classList.add('hidden');
+            });
+            buildingListEl.appendChild(btn);
+        });
+
+        document.getElementById('btn-zoom-in').addEventListener('click', () => controls.dollyIn(1.25));
+        document.getElementById('btn-zoom-out').addEventListener('click', () => controls.dollyOut(1.25));
+        document.getElementById('btn-toggle-menu').addEventListener('click', () => {
+            const menu = document.getElementById('building-menu');
+            menu.classList.toggle('hidden'); menu.classList.toggle('flex');
+        });
+        document.getElementById('btn-close-menu').addEventListener('click', () => document.getElementById('building-menu').classList.add('hidden'));
+        document.getElementById('close-modal').addEventListener('click', () => document.getElementById('info-modal').classList.add('hidden'));
+
+        document.getElementById('btn-focus').addEventListener('click', () => {
+            if (selectedMesh) {
+                const parentPos = selectedMesh.parent.position;
+                controls.target.set(parentPos.x, parentPos.y + 5, parentPos.z);
+                camera.position.set(parentPos.x + 35, parentPos.y + 35, parentPos.z + 45);
+            }
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            controls.target.set(0, 0, 0);
+            camera.position.set(0, 140, 260);
+            document.getElementById('info-modal').classList.add('hidden');
+        });
+
+        let isNight = false;
+        document.getElementById('btn-day-night').addEventListener('click', () => {
+            isNight = !isNight;
+            const icon = document.getElementById('theme-icon');
+            if (isNight) {
+                scene.background.setHex(0x050811); scene.fog.color.setHex(0x050811);
+                ambientLight.intensity = 0.15; sunLight.intensity = 0.08;
+                icon.className = "fa-solid fa-moon text-blue-300";
+            } else {
+                scene.background.setHex(0x87ceeb); scene.fog.color.setHex(0x87ceeb);
+                ambientLight.intensity = 0.75; sunLight.intensity = 1.6;
+                icon.className = "fa-solid fa-sun text-yellow-400";
+            }
+        });
+
+        // --- 12. JOYSTICK TACTILE ---
+        let moveVector = { x: 0, z: 0 };
+        const joystickBase = document.getElementById('joystick-base');
+        const joystickStick = document.getElementById('joystick-stick');
+        let joystickActive = false, touchId = null;
+
+        joystickBase.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            touchId = e.changedTouches[0].identifier; joystickActive = true;
+            updateJoystick(e.changedTouches[0]);
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!joystickActive) return;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === touchId) {
+                    updateJoystick(e.changedTouches[i]); break;
+                }
+            }
+        }, { passive: false });
+
+        const resetJoystick = () => {
+            joystickActive = false; touchId = null;
+            joystickStick.style.top = '29px'; joystickStick.style.left = '29px';
+            moveVector = { x: 0, z: 0 };
+        };
+
+        window.addEventListener('touchend', resetJoystick);
+        window.addEventListener('touchcancel', resetJoystick);
+
+        function updateJoystick(touch) {
+            const rect = joystickBase.getBoundingClientRect();
+            let deltaX = touch.clientX - (rect.left + rect.width / 2);
+            let deltaY = touch.clientY - (rect.top + rect.height / 2);
+            const distance = Math.min(Math.hypot(deltaX, deltaY), 40);
+            const angle = Math.atan2(deltaY, deltaX);
+
+            const stickX = Math.cos(angle) * distance;
+            const stickY = Math.sin(angle) * distance;
+
+            joystickStick.style.left = `${29 + stickX}px`;
+            joystickStick.style.top = `${29 + stickY}px`;
+            moveVector.x = stickX / 40; moveVector.z = stickY / 40;
+        }
+
+        // --- 13. BOUCLE DE RENDU ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            taxisExterne.forEach(t => {
+                t.mesh.position.x = t.laneOffset;
+                t.mesh.position.z += t.speed * t.direction;
+                t.mesh.rotation.y = t.direction === 1 ? 0 : Math.PI;
+                if (t.mesh.position.z > t.zMax) t.mesh.position.z = t.zMin;
+                if (t.mesh.position.z < t.zMin) t.mesh.position.z = t.zMax;
+            });
+
+            if (moveVector.x !== 0 || moveVector.z !== 0) {
+                const speed = 1.5;
+                const forward = new THREE.Vector3();
+                camera.getWorldDirection(forward); forward.y = 0; forward.normalize();
+                const side = new THREE.Vector3();
+                side.crossVectors(camera.up, forward).normalize();
+
+                const moveX = (forward.x * -moveVector.z + side.x * moveVector.x) * speed;
+                const moveZ = (forward.z * -moveVector.z + side.z * moveVector.x) * speed;
+
+                camera.position.x += moveX; camera.position.z += moveZ;
+                controls.target.x += moveX; controls.target.z += moveZ;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
